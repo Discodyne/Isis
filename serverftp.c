@@ -14,16 +14,16 @@
 #include <sys/shm.h>
 
 const int EPOLL_SIZE = 10;
-const int EPOLL_EVENTS = 10;
+const int EPOLL_EVENTS = 10;//максимальное кол-во событий,которое может быть присвоено процессу
 const int buf_size = 100;
-const int ans_size = 5000;
-int server_sockfd;
+const int ans_size = 5000;//объем буфера,который мы отправляем клиенту при ответе с сервера
+int server_sockfd;//файловый дискриптор сокета сервера
 //const char f_permissions[3] = {'r','w','x'};
 
-typedef struct list_answer_file_t
+typedef struct list_answer_file_t // Структура
 {
     mode_t permissions;
-    int number;
+    int number;//Жесткие ссылки
     int owner;
     int group;
     int filesize;
@@ -33,21 +33,21 @@ typedef struct list_answer_file_t
 
 typedef struct list_answer_t
 {
-    list_answer_file_t* files;
-    int count;
+    list_answer_file_t* files;//ссылка на предыдущую структуру
+    int count;//число файлов в директории
 }list_answer_t;
 
 char* get_list_answer_file(list_answer_file_t* answer);
 
-char* get_list_answer(char* path)
+char* get_list_answer(char* path)//метод для получение информации о файлах(для команды LIST)
 {
-    list_answer_t* answer = (list_answer_t*)malloc(sizeof(list_answer_t));
+    list_answer_t* answer = (list_answer_t*)malloc(sizeof(list_answer_t));//объявляем экземпляр структуры list_answer_t
     answer->count = 0;
-    DIR* dir = opendir(path); 
+    DIR* dir = opendir(path);//Открываем Directorystream (открываем директорию)
 
-    char* result = (char*)malloc(sizeof(char)*ans_size);
+    char* result = (char*)malloc(sizeof(char)*ans_size);//Массив чаров
     int z = 0;
-    for (z = 0; z < ans_size; z++)
+    for (z = 0; z < ans_size; z++)//Массив пустой,длинной 5к строк
         result[z] = '\0';
     if (dir == NULL)
     {
@@ -55,26 +55,26 @@ char* get_list_answer(char* path)
     }
     else
     {
-        struct dirent* dirstr;
+        struct dirent* dirstr;//Объявляем структуру типа dirent
         while ((dirstr = readdir(dir)) != NULL)
         {
-            answer->count++;
-            list_answer_file_t* files = (list_answer_file_t*)malloc(sizeof(list_answer_file_t)*answer->count);
+            answer->count++;//Счетчик
+            list_answer_file_t* files = (list_answer_file_t*)malloc(sizeof(list_answer_file_t)*answer->count);//Ввделяем память под все строчки
             int i = 0;
             for (i = 0; i < answer->count - 1; i++)
             {
                 files[i] = answer->files[i];
             }
             int j = 0;
-            int length = strlen(dirstr->d_name);
-            files[i].filename = (char*)malloc(sizeof(char)*(length + 1));
+            int length = strlen(dirstr->d_name);//Длина имени файла
+            files[i].filename = (char*)malloc(sizeof(char)*(length + 1));//Выделяем память под имя файла
             for (j = 0; j < length; j++)
             {
                 files[i].filename[j] = dirstr->d_name[j];
             }
-            files[i].filename[j] = '\0';
-            struct stat fileinfo;
-            stat(files[i].filename, &fileinfo);
+            files[i].filename[j] = '\0';// Перенос строки(самая последняя строчка пустая)
+            struct stat fileinfo;//Stat - тип структуры 
+            stat(files[i].filename, &fileinfo);//Достаем информацию из структуры Stat(вызов функции)
             files[i].number = fileinfo.st_nlink;
             files[i].filesize = fileinfo.st_size;
             files[i].group = fileinfo.st_gid;
@@ -86,21 +86,21 @@ char* get_list_answer(char* path)
         int i = 0;
         for (i = 0; i < answer->count; i++)
         {
-            char* perm = get_list_answer_file(&(answer->files[i]));
-            result = strcat(result, perm);
+            char* perm = get_list_answer_file(&(answer->files[i]));//Вызываем метод для получение модификатора доступа к файлу
+            result = strcat(result, perm);//Сливаем result и perm в одну строчку
         }
-        rewinddir(dir);
-        closedir(dir);
+        rewinddir(dir);//Уходим из потока директории
+        closedir(dir);//Закрываем поток директории
         return result;
     }
 }
 
-char* get_dir(char* d)
+char* get_dir(char* d)//метод для получения текущей дериктории (для команды CWD)
 {
-    char* res = (char*)malloc(sizeof(char)*buf_size);
+    char* res = (char*)malloc(sizeof(char)*buf_size);//Выделяем память для результата
     int i = 0;
     int j = 0;
-    while ((i < strlen(d)) && (d[i] != '\n'))
+    while ((i < strlen(d)) && (d[i] != '\n'))//Реализация перехода между директориями
     {
         if (d[i] == '.')
         {
@@ -162,11 +162,11 @@ char* get_dir(char* d)
 
 int main()
 {
-    int client_sockfd;
+    int client_sockfd;//инициализация Файлового дискриптора сокет-клиент
     int server_len, client_len;
     struct sockaddr_in server_address;
     struct sockaddr_in client_address;
-    server_sockfd = socket(AF_INET,SOCK_STREAM,0);
+    server_sockfd = socket(AF_INET,SOCK_STREAM,0);//Создаем сокет (Сокет должен быть сетевым,потоковым,протокол по умолчанию)
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
     server_address.sin_port = 9734;
@@ -174,22 +174,22 @@ int main()
     bind(server_sockfd, (struct sockaddr*)&server_address, server_len);
     listen(server_sockfd,5);
     signal(SIGCHLD,SIG_IGN);
-    int efd = epoll_create(EPOLL_SIZE);
-    struct epoll_event evlist[EPOLL_EVENTS];
+    int efd = epoll_create(EPOLL_SIZE);//в efd будет файловый дискриптор(ф-ция epoll_create возвращает в efd файловый дискриптор)
+    struct epoll_event evlist[EPOLL_EVENTS];//Инициализируем структуру epoll_event,которая будет размером EPOLL_EVENTS
 
-    while(1)
+    while(1)//Бесконечный цикл
     {
         printf("server waiting\n");
-        client_len = sizeof(client_address);
+        client_len = sizeof(client_address);//Размер адреса клиента
 
-        client_sockfd = accept(server_sockfd, (struct sockaddr*)&client_address, &client_len);
+        client_sockfd = accept(server_sockfd, (struct sockaddr*)&client_address, &client_len);//Содаем клиентский сокет
 
         struct epoll_event ev;
-        ev.data.fd = client_sockfd;
-        ev.events = EPOLLIN;
-        epoll_ctl(efd, EPOLL_CTL_ADD, client_sockfd, &ev);
+        ev.data.fd = client_sockfd;//К событиям привязывается клиентский сокет
+        ev.events = EPOLLIN;//Даем понять,что разрешены операции чтения(только)
+        epoll_ctl(efd, EPOLL_CTL_ADD, client_sockfd, &ev);//Интерфейс для управления экземпляром epoll
 
-        int ready = epoll_wait(efd, evlist, EPOLL_EVENTS, -1);
+        int ready = epoll_wait(efd, evlist, EPOLL_EVENTS, -1);//Запуск ожиданий
         int j;
         for (j = 0; j < ready; j++)
         {
@@ -287,11 +287,11 @@ int main()
 
                 if (strncasecmp(buf[0],"LIST\n", strlen(buf[0]) - 1) == 0)
                 {
-                    result = get_list_answer(dir);
+                    result = get_list_answer(dir);//ИДЕМ за списком файлов
                 }
                 else
                 {
-                    if (strncasecmp(buf[0],"CWD\n", 3) == 0)
+                    if (strncasecmp(buf[0],"CWD\n", 3) == 0)//Проверяем соответствие двух строк(buf[0] и CWD)
                     {
                         char* tmp = (char*)malloc(sizeof(char)*buf_size);
                         if (buf[1][0] == '.')
@@ -407,9 +407,9 @@ char* get_list_answer_file(list_answer_file_t* answer)
 {
     char* result = (char*)malloc(sizeof(char)*buf_size);
     result[0] = '-';
-    switch (answer->permissions & S_IFMT)
+    switch (answer->permissions & S_IFMT)//Какого типа файл
     {
-    case S_IFDIR: {
+    case S_IFDIR: { //папка 
         result[0] = 'd';
         break;
     }
@@ -421,7 +421,7 @@ char* get_list_answer_file(list_answer_file_t* answer)
         result[0] = 'b';
         break;
     }
-    case S_IFREG : {
+    case S_IFREG : { //файл
         result[0] = '-';
         break;
     }
@@ -429,7 +429,7 @@ char* get_list_answer_file(list_answer_file_t* answer)
         result[0] = 'l';
         break;
     }
-    case S_IFSOCK: {
+    case S_IFSOCK: { //Сокет
         result[0] = 's';
         break;
     }
@@ -440,9 +440,9 @@ char* get_list_answer_file(list_answer_file_t* answer)
     for (perm = 0; perm < 3; perm++)
     {
         int x = (answer->permissions/q)%10;
-        if (x > 3)
+        if (x > 3)//Определяем какие у нас есть права
         {
-            result[1 + perm*3] = 'r';
+            result[1 + perm*3] = 'r';//Права у файла read(на чтение)
             x -= 4;
         }
         else
@@ -460,7 +460,7 @@ char* get_list_answer_file(list_answer_file_t* answer)
         }
         if (x > 0)
         {
-            result[2 + perm*3] = 'w';
+            result[2 + perm*3] = 'w';//Права у файла на запись
         }
         else
         {
@@ -468,7 +468,7 @@ char* get_list_answer_file(list_answer_file_t* answer)
         }
         q /= 10;
     }
-
+   //Приведение 
     result[10] = ' ';
     char* l = (char*)malloc(sizeof(char)*3);
     sprintf(l,"%i\n",answer->number);
@@ -522,7 +522,7 @@ char* get_list_answer_file(list_answer_file_t* answer)
     free(l);
     l = (char*)malloc(sizeof(char)*40);
     struct tm* t = localtime(&answer->time.tv_sec);
-    sprintf(l, "%i-%i %i:%i:%i\n", t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+    sprintf(l, "%i-%i %i:%i:%i\n", t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);//Приведение даты создания к нормальному виду 
     j = 0;
     for (j = 0; j < strlen(l); j++)
         result[j+i] = l[j];
